@@ -40,7 +40,8 @@ interface DocumentPDFProps {
 }
 
 function fmt(n: number): string {
-  return new Intl.NumberFormat("fr-FR").format(Math.round(n));
+  const rounded = Math.round(n);
+  return rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 }
 
 function fmtDate(d: string): string {
@@ -287,16 +288,10 @@ export function DocumentPDF({
         {apposerSignature && (entreprise.cachet_url || entreprise.signature_url) && (
           <View style={s.stampWrap}>
             {entreprise.cachet_url && (
-              <View>
-                <Text style={s.stampLabel}>Cachet</Text>
-                <Image src={entreprise.cachet_url} style={s.stampImg} />
-              </View>
+              <Image src={entreprise.cachet_url} style={s.stampImg} />
             )}
             {entreprise.signature_url && (
-              <View>
-                <Text style={s.stampLabel}>Signature</Text>
-                <Image src={entreprise.signature_url} style={s.sigImg} />
-              </View>
+              <Image src={entreprise.signature_url} style={s.sigImg} />
             )}
           </View>
         )}

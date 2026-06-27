@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
   Plus,
@@ -22,9 +21,13 @@ import {
   Loader2,
   FileText,
   ArrowRightLeft,
+  Download,
+  CalendarIcon,
 } from "lucide-react";
-import type { Devis } from "@/types/database";
+import type { Devis, Entreprise, Client as ClientType, StatutDevis } from "@/types/database";
 import { formatMontant, formatDate } from "@/lib/formatters";
+import { pdf } from "@react-pdf/renderer";
+import { DocumentPDF } from "@/components/pdf/document-pdf";
 import Link from "next/link";
 
 const statutColors: Record<string, string> = {
@@ -43,23 +46,101 @@ const statutLabels: Record<string, string> = {
   expire: "Expiré",
 };
 
+const allStatuts: StatutDevis[] = ["brouillon", "envoye", "accepte", "refuse", "expire"];
+
 export default function DevisPage() {
-  const [devisList, setDevisList] = useState<(Devis & { client: { nom: string } })[]>([]);
+  const [devisList, setDevisList] = useState<(Devis & { client: { nom: string; adresse?: string; telephone?: string; email?: string; ninea?: string; raison_sociale?: string } })[]>([]);
+  const [entreprise, setEntreprise] = useState<Entreprise | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [dateDebut, setDateDebut] = useState("");
+  const [dateFin, setDateFin] = useState("");
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+
+  const loadData = useCallback(async () => {
+    const supabase = createClient();
+    const [devisRes, entrepriseRes] = await Promise.all([
+      supabase
+        .from("devis")
+        .select("*, client:clients(nom, adresse, telephone, email, ninea, raison_sociale)")
+        .order("created_at", { ascending: false }),
+      supabase.from("entreprise").select("*").single(),
+    ]);
+    setDevisList(devisRes.data ?? []);
+    setEntreprise(entrepriseRes.data);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    const load = async () => {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from("devis")
-        .select("*, client:clients(nom)")
-        .order("created_at", { ascending: false });
-      setDevisList(data ?? []);
-      setLoading(false);
-    };
-    load();
-  }, []);
+    loadData();
+  }, [loadData]);
+
+  const handleStatutChange = async (devisId: string, newStatut: StatutDevis) => {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("devis")
+      .update({ statut: newStatut, updated_at: new Date().toISOString() })
+      .eq("id", devisId);
+    if (error) toast.error("Erreur lors du changement de statut");
+    else {
+      toast.success(`Statut changé en "${statutLabels[newStatut]}"`);
+      loadData();
+    }
+  };
+
+  const handleDownloadPDF = async (devis: Devis & { client: { nom: string; adresse?: string; telephone?: string; email?: string; ninea?: string; raison_sociale?: string } }) => {
+    if (!entreprise) return;
+    setGeneratingId(devis.id);
+
+    const supabase = createClient();
+    const { data: lignes } = await supabase
+      .from("lignes_devis")
+      .select("*")
+      .eq("devis_id", devis.id);
+
+    let parsedNotes = "";
+    let tvaPourcent = 18;
+    let remisePourcent = 0;
+    let apposerSig = true;
+    try {
+      const parsed = JSON.parse(devis.notes ?? "{}");
+      parsedNotes = parsed.notes ?? devis.notes ?? "";
+      tvaPourcent = parsed.tva_pourcent ?? 18;
+      remisePourcent = parsed.remise_pourcent ?? 0;
+      apposerSig = parsed.apposer_signature ?? true;
+    } catch {
+      parsedNotes = devis.notes ?? "";
+    }
+
+    const blob = await pdf(
+      <DocumentPDF
+        type="devis"
+        numero={devis.numero}
+        date={devis.date_devis}
+        dateSecondaire={devis.date_validite}
+        dateSecondaireLabel="Validité"
+        entreprise={entreprise}
+        client={devis.client as ClientType}
+        lignes={lignes ?? []}
+        sousTotal={devis.sous_total}
+        tvaTotal={devis.tva_total}
+        totalTTC={devis.total_ttc}
+        remiseGlobale={devis.remise_globale}
+        remisePourcent={remisePourcent}
+        tvaPourcent={tvaPourcent}
+        apposerSignature={apposerSig}
+        conditions={devis.conditions_paiement ?? undefined}
+        notes={parsedNotes || undefined}
+      />
+    ).toBlob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${devis.numero}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setGeneratingId(null);
+  };
 
   const handleConvertToFacture = async (devis: Devis) => {
     if (!confirm("Transformer ce devis en facture ?")) return;
@@ -68,21 +149,12 @@ export default function DevisPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data: entreprise } = await supabase
-      .from("entreprise")
-      .select("prefixe_facture")
-      .single();
-
+    const { data: ent } = await supabase.from("entreprise").select("prefixe_facture").single();
     const annee = new Date().getFullYear();
-    const { count } = await supabase
-      .from("factures")
-      .select("id", { count: "exact", head: true });
-    const numero = `${entreprise?.prefixe_facture ?? "FAC"}-${annee}-${String((count ?? 0) + 1).padStart(4, "0")}`;
+    const { count } = await supabase.from("factures").select("id", { count: "exact", head: true });
+    const numero = `${ent?.prefixe_facture ?? "FAC"}-${annee}-${String((count ?? 0) + 1).padStart(4, "0")}`;
 
-    const { data: lignes } = await supabase
-      .from("lignes_devis")
-      .select("*")
-      .eq("devis_id", devis.id);
+    const { data: lignes } = await supabase.from("lignes_devis").select("*").eq("devis_id", devis.id);
 
     const { data: facture, error } = await supabase
       .from("factures")
@@ -91,7 +163,7 @@ export default function DevisPage() {
         client_id: devis.client_id,
         devis_id: devis.id,
         date_facture: new Date().toISOString().split("T")[0],
-        date_echeance: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+        date_echeance: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
         sous_total: devis.sous_total,
         remise_globale: devis.remise_globale,
         tva_total: devis.tva_total,
@@ -104,10 +176,7 @@ export default function DevisPage() {
       .select()
       .single();
 
-    if (error || !facture) {
-      toast.error("Erreur lors de la conversion");
-      return;
-    }
+    if (error || !facture) { toast.error("Erreur lors de la conversion"); return; }
 
     if (lignes?.length) {
       await supabase.from("lignes_factures").insert(
@@ -125,20 +194,22 @@ export default function DevisPage() {
       );
     }
 
-    await supabase
-      .from("devis")
-      .update({ statut: "accepte", facture_id: facture.id })
-      .eq("id", devis.id);
-
+    await supabase.from("devis").update({ statut: "accepte", facture_id: facture.id }).eq("id", devis.id);
     toast.success(`Facture ${numero} créée`);
     window.location.href = "/factures";
   };
 
-  const filtered = devisList.filter(
-    (d) =>
+  const filtered = devisList.filter((d) => {
+    const matchSearch =
       d.numero.toLowerCase().includes(search.toLowerCase()) ||
-      d.client?.nom?.toLowerCase().includes(search.toLowerCase())
-  );
+      d.client?.nom?.toLowerCase().includes(search.toLowerCase());
+
+    let matchDate = true;
+    if (dateDebut) matchDate = matchDate && d.date_devis >= dateDebut;
+    if (dateFin) matchDate = matchDate && d.date_devis <= dateFin;
+
+    return matchSearch && matchDate;
+  });
 
   return (
     <div className="space-y-6">
@@ -157,8 +228,8 @@ export default function DevisPage() {
 
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-4">
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1 max-w-sm">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Rechercher un devis..."
@@ -166,6 +237,27 @@ export default function DevisPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
+            </div>
+            <div className="flex items-center gap-2">
+              <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+              <Input
+                type="date"
+                value={dateDebut}
+                onChange={(e) => setDateDebut(e.target.value)}
+                className="w-[140px] h-9"
+              />
+              <span className="text-muted-foreground text-sm">à</span>
+              <Input
+                type="date"
+                value={dateFin}
+                onChange={(e) => setDateFin(e.target.value)}
+                className="w-[140px] h-9"
+              />
+              {(dateDebut || dateFin) && (
+                <Button variant="ghost" size="sm" onClick={() => { setDateDebut(""); setDateFin(""); }}>
+                  Effacer
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -202,9 +294,15 @@ export default function DevisPage() {
                       {formatDate(devis.date_devis)}
                     </TableCell>
                     <TableCell>
-                      <Badge className={statutColors[devis.statut]}>
-                        {statutLabels[devis.statut]}
-                      </Badge>
+                      <select
+                        value={devis.statut}
+                        onChange={(e) => handleStatutChange(devis.id, e.target.value as StatutDevis)}
+                        className={`text-xs font-medium px-2 py-1 rounded-full border-0 cursor-pointer outline-none ${statutColors[devis.statut]}`}
+                      >
+                        {allStatuts.map((s) => (
+                          <option key={s} value={s}>{statutLabels[s]}</option>
+                        ))}
+                      </select>
                     </TableCell>
                     <TableCell className="text-right font-medium">
                       {formatMontant(devis.total_ttc)}
@@ -212,10 +310,23 @@ export default function DevisPage() {
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Link href={`/devis/${devis.id}`}>
-                          <Button variant="ghost" size="icon">
+                          <Button variant="ghost" size="icon" title="Voir">
                             <Eye className="h-4 w-4" />
                           </Button>
                         </Link>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Télécharger PDF"
+                          onClick={() => handleDownloadPDF(devis)}
+                          disabled={generatingId === devis.id}
+                        >
+                          {generatingId === devis.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
+                        </Button>
                         {(devis.statut === "envoye" || devis.statut === "accepte") &&
                           !devis.facture_id && (
                             <Button
