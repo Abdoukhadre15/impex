@@ -27,7 +27,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -40,9 +39,12 @@ import {
   TrendingUp,
   TrendingDown,
   Wallet,
+  Download,
 } from "lucide-react";
-import type { OperationCompta, CategorieCompta, TypeOperation, ModePaiement } from "@/types/database";
+import type { OperationCompta, CategorieCompta, TypeOperation, ModePaiement, Entreprise } from "@/types/database";
 import { formatMontant, formatDate } from "@/lib/formatters";
+import { pdf } from "@react-pdf/renderer";
+import { RapportComptaPDF } from "@/components/pdf/rapport-compta-pdf";
 
 const emptyOp = {
   type: "entree" as TypeOperation,
@@ -67,11 +69,13 @@ const modesLabels: Record<string, string> = {
 export default function ComptabilitePage() {
   const [operations, setOperations] = useState<(OperationCompta & { categorie: CategorieCompta })[]>([]);
   const [categories, setCategories] = useState<CategorieCompta[]>([]);
+  const [entreprise, setEntreprise] = useState<Entreprise | null>(null);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyOp);
   const [saving, setSaving] = useState(false);
   const [filtrePeriode, setFiltrePeriode] = useState("mois");
+  const [generatingPDF, setGeneratingPDF] = useState(false);
 
   const loadData = async () => {
     const supabase = createClient();
@@ -86,16 +90,18 @@ export default function ComptabilitePage() {
       dateDebut = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     }
 
-    const [opsRes, catsRes] = await Promise.all([
+    const [opsRes, catsRes, entRes] = await Promise.all([
       supabase
         .from("operations_compta")
         .select("*, categorie:categories_compta(*)")
         .gte("date_operation", dateDebut.toISOString().split("T")[0])
         .order("date_operation", { ascending: false }),
       supabase.from("categories_compta").select("*").order("nom"),
+      supabase.from("entreprise").select("*").single(),
     ]);
     setOperations(opsRes.data ?? []);
     setCategories(catsRes.data ?? []);
+    setEntreprise(entRes.data);
     setLoading(false);
   };
 
@@ -128,6 +134,30 @@ export default function ComptabilitePage() {
     setSaving(false);
   };
 
+  const handleDownloadRapport = async () => {
+    if (!entreprise) return;
+    setGeneratingPDF(true);
+
+    const blob = await pdf(
+      <RapportComptaPDF
+        entreprise={entreprise}
+        operations={operations}
+        periode={filtrePeriode}
+        totalEntrees={totalEntrees}
+        totalSorties={totalSorties}
+        solde={solde}
+      />
+    ).toBlob();
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Rapport-comptable-${filtrePeriode}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setGeneratingPDF(false);
+  };
+
   const totalEntrees = operations
     .filter((o) => o.type === "entree")
     .reduce((a, o) => a + o.montant, 0);
@@ -140,128 +170,127 @@ export default function ComptabilitePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Comptabilité</h1>
           <p className="text-muted-foreground">Suivi des entrées et sorties</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger render={<Button className="bg-[#DD0000] hover:bg-[#BB0000]" />}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nouvelle opération
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Nouvelle opération</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Type</Label>
-                <Select
-                  value={form.type}
-                  onValueChange={(v) =>
-                    v && setForm({ ...form, type: v as TypeOperation, categorie_id: "" })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="entree">Entrée (recette)</SelectItem>
-                    <SelectItem value="sortie">Sortie (dépense)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Catégorie *</Label>
-                <Select
-                  value={form.categorie_id}
-                  onValueChange={(v) => setForm({ ...form, categorie_id: v ?? "" })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choisir" />
-                  </SelectTrigger>
-                  <SelectContent>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={handleDownloadRapport}
+            disabled={generatingPDF || operations.length === 0}
+          >
+            {generatingPDF ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
+            Rapport PDF
+          </Button>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger render={<Button className="bg-[#DD0000] hover:bg-[#BB0000]" />}>
+              <Plus className="mr-2 h-4 w-4" />
+              Nouvelle opération
+            </DialogTrigger>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Nouvelle opération</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Type</Label>
+                  <select
+                    value={form.type}
+                    onChange={(e) => setForm({ ...form, type: e.target.value as TypeOperation, categorie_id: "" })}
+                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50"
+                  >
+                    <option value="entree">Entrée (recette)</option>
+                    <option value="sortie">Sortie (dépense)</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Catégorie *</Label>
+                  <select
+                    value={form.categorie_id}
+                    onChange={(e) => setForm({ ...form, categorie_id: e.target.value })}
+                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50"
+                  >
+                    <option value="">-- Choisir --</option>
                     {filteredCategories.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.nom}
-                      </SelectItem>
+                      <option key={c.id} value={c.id}>{c.nom}</option>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Montant (FCFA) *</Label>
-                  <Input
-                    type="number"
-                    value={form.montant}
-                    onChange={(e) => setForm({ ...form, montant: Number(e.target.value) })}
-                  />
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Montant (FCFA) *</Label>
+                    <Input
+                      type="number"
+                      value={form.montant}
+                      onChange={(e) => setForm({ ...form, montant: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Date</Label>
+                    <Input
+                      type="date"
+                      value={form.date_operation}
+                      onChange={(e) => setForm({ ...form, date_operation: e.target.value })}
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Date</Label>
+                  <Label>Description *</Label>
                   <Input
-                    type="date"
-                    value={form.date_operation}
-                    onChange={(e) => setForm({ ...form, date_operation: e.target.value })}
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
                   />
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Description *</Label>
-                <Input
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Mode de paiement</Label>
-                  <Select
-                    value={form.mode_paiement}
-                    onValueChange={(v) => v && setForm({ ...form, mode_paiement: v as ModePaiement })}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Mode de paiement</Label>
+                    <select
+                      value={form.mode_paiement}
+                      onChange={(e) => setForm({ ...form, mode_paiement: e.target.value as ModePaiement })}
+                      className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50"
+                    >
                       {Object.entries(modesLabels).map(([k, v]) => (
-                        <SelectItem key={k} value={k}>{v}</SelectItem>
+                        <option key={k} value={k}>{v}</option>
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Compte</Label>
+                    <select
+                      value={form.compte}
+                      onChange={(e) => setForm({ ...form, compte: e.target.value as "caisse" | "banque" })}
+                      className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50"
+                    >
+                      <option value="caisse">Caisse</option>
+                      <option value="banque">Banque</option>
+                    </select>
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Compte</Label>
-                  <Select
-                    value={form.compte}
-                    onValueChange={(v) => v && setForm({ ...form, compte: v as "caisse" | "banque" })}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="caisse">Caisse</SelectItem>
-                      <SelectItem value="banque">Banque</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Référence</Label>
+                  <Input
+                    value={form.reference}
+                    onChange={(e) => setForm({ ...form, reference: e.target.value })}
+                    placeholder="N° reçu, chèque..."
+                  />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label>Référence</Label>
-                <Input
-                  value={form.reference}
-                  onChange={(e) => setForm({ ...form, reference: e.target.value })}
-                  placeholder="N° reçu, chèque..."
-                />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>Annuler</Button>
+                <Button onClick={handleSave} disabled={saving} className="bg-[#DD0000] hover:bg-[#BB0000]">
+                  {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Enregistrer
+                </Button>
               </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Annuler</Button>
-              <Button onClick={handleSave} disabled={saving} className="bg-[#DD0000] hover:bg-[#BB0000]">
-                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Enregistrer
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -312,17 +341,16 @@ export default function ComptabilitePage() {
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">Journal des opérations</CardTitle>
-            <Select value={filtrePeriode} onValueChange={(v) => setFiltrePeriode(v ?? "mois")}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="jour">Aujourd&apos;hui</SelectItem>
-                <SelectItem value="semaine">Cette semaine</SelectItem>
-                <SelectItem value="mois">Ce mois</SelectItem>
-                <SelectItem value="annee">Cette année</SelectItem>
-              </SelectContent>
-            </Select>
+            <select
+              value={filtrePeriode}
+              onChange={(e) => setFiltrePeriode(e.target.value)}
+              className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50"
+            >
+              <option value="jour">Aujourd&apos;hui</option>
+              <option value="semaine">Cette semaine</option>
+              <option value="mois">Ce mois</option>
+              <option value="annee">Cette année</option>
+            </select>
           </div>
         </CardHeader>
         <CardContent>

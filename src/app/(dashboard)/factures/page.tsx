@@ -70,15 +70,54 @@ export default function FacturesPage() {
 
   const handleStatutChange = async (factureId: string, newStatut: StatutFacture) => {
     const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
     const { error } = await supabase
       .from("factures")
       .update({ statut: newStatut, updated_at: new Date().toISOString() })
       .eq("id", factureId);
-    if (error) toast.error("Erreur lors du changement de statut");
-    else {
-      toast.success(`Statut changé en "${statutLabels[newStatut]}"`);
-      loadData();
+    if (error) { toast.error("Erreur lors du changement de statut"); return; }
+
+    if (newStatut === "payee" && user) {
+      const facture = factures.find((f) => f.id === factureId);
+      if (facture) {
+        const { data: catVente } = await supabase
+          .from("categories_compta")
+          .select("id")
+          .eq("type", "entree")
+          .limit(1)
+          .single();
+
+        if (catVente) {
+          await supabase.from("operations_compta").insert([{
+            type: "entree",
+            categorie_id: catVente.id,
+            montant: facture.total_ttc,
+            date_operation: new Date().toISOString().split("T")[0],
+            description: `Paiement facture ${facture.numero} — ${facture.client?.nom}`,
+            reference: facture.numero,
+            mode_paiement: "especes",
+            compte: "caisse",
+            facture_id: facture.id,
+            created_by: user.id,
+          }]);
+        }
+
+        if (facture.reste_a_payer > 0) {
+          await supabase.from("paiements").insert([{
+            facture_id: facture.id,
+            montant: facture.reste_a_payer,
+            date_paiement: new Date().toISOString().split("T")[0],
+            mode_paiement: "especes",
+            reference: "Paiement complet",
+            created_by: user.id,
+          }]);
+        }
+      }
     }
+
+    toast.success(`Statut changé en "${statutLabels[newStatut]}"`);
+    loadData();
   };
 
   const handleDownloadPDF = async (facture: Facture & { client: { nom: string; adresse?: string; telephone?: string; email?: string; ninea?: string; raison_sociale?: string } }) => {
