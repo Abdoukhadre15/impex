@@ -19,6 +19,7 @@ export interface Entreprise {
   rc?: string;
   adresse: string;
   telephone: string;
+  telephone_fixe?: string;
   email: string;
   site_web?: string;
   logo_url?: string;

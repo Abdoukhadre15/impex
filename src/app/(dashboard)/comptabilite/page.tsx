@@ -90,12 +90,16 @@ export default function ComptabilitePage() {
   const [form, setForm] = useState(emptyOp);
   const [saving, setSaving] = useState(false);
   const [filtrePeriode, setFiltrePeriode] = useState<PeriodeValue>("ce_mois");
+  const [dateDebut, setDateDebut] = useState("");
+  const [dateFin, setDateFin] = useState("");
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [nouvelleCat, setNouvelleCat] = useState("");
 
   const loadData = async () => {
     const supabase = createClient();
-    const { debut, fin } = getDateRange(filtrePeriode);
+    const range = getDateRange(filtrePeriode);
+    const debut = dateDebut || range.debut;
+    const fin = dateFin || range.fin;
 
     const [opsRes, catsRes, entRes] = await Promise.all([
       supabase
@@ -115,7 +119,7 @@ export default function ComptabilitePage() {
 
   useEffect(() => {
     loadData();
-  }, [filtrePeriode]);
+  }, [filtrePeriode, dateDebut, dateFin]);
 
   const selectedCatIsAutre = (() => {
     const cat = categories.find((c) => c.id === form.categorie_id);
@@ -465,17 +469,36 @@ export default function ComptabilitePage() {
 
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-3">
             <CardTitle className="text-lg">Journal des opérations</CardTitle>
-            <select
-              value={filtrePeriode}
-              onChange={(e) => setFiltrePeriode(e.target.value as PeriodeValue)}
-              className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50"
-            >
-              {PERIODES.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={filtrePeriode}
+                onChange={(e) => { setFiltrePeriode(e.target.value as PeriodeValue); setDateDebut(""); setDateFin(""); }}
+                className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50"
+              >
+                {PERIODES.map((p) => (
+                  <option key={p.value} value={p.value}>{p.label}</option>
+                ))}
+              </select>
+              <span className="text-muted-foreground text-xs">ou</span>
+              <input
+                type="date"
+                value={dateDebut}
+                onChange={(e) => setDateDebut(e.target.value)}
+                className="h-9 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50 w-[130px]"
+              />
+              <span className="text-muted-foreground text-xs">à</span>
+              <input
+                type="date"
+                value={dateFin}
+                onChange={(e) => setDateFin(e.target.value)}
+                className="h-9 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50 w-[130px]"
+              />
+              {(dateDebut || dateFin) && (
+                <button onClick={() => { setDateDebut(""); setDateFin(""); }} className="text-xs text-red-500 hover:underline">Effacer</button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>

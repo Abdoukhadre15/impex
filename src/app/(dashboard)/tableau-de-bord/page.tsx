@@ -52,6 +52,8 @@ const MOIS_LABELS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août"
 
 export default function TableauDeBordPage() {
   const [periode, setPeriode] = useState<PeriodeValue>("ce_mois");
+  const [dateDebut, setDateDebut] = useState("");
+  const [dateFin, setDateFin] = useState("");
   const [stats, setStats] = useState<DashboardStats>({
     totalClients: 0, totalProduits: 0, devisEnCours: 0,
     facturesImpayees: 0, caperiode: 0, facturesRetard: 0,
@@ -64,7 +66,9 @@ export default function TableauDeBordPage() {
     setLoading(true);
     const supabase = createClient();
     const now = new Date();
-    const { debut, fin } = getDateRange(periode);
+    const range = getDateRange(periode);
+    const debut = dateDebut || range.debut;
+    const fin = dateFin || range.fin;
 
     const [clients, produits, devis, factures] = await Promise.all([
       supabase.from("clients").select("id", { count: "exact", head: true }),
@@ -127,7 +131,7 @@ export default function TableauDeBordPage() {
 
     setPieData(Array.from(catCount.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value));
     setLoading(false);
-  }, [periode]);
+  }, [periode, dateDebut, dateFin]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
@@ -151,15 +155,34 @@ export default function TableauDeBordPage() {
           <h1 className="text-2xl font-bold text-gray-900">Tableau de bord</h1>
           <p className="text-muted-foreground">Vue d&apos;ensemble de votre activité commerciale</p>
         </div>
-        <select
-          value={periode}
-          onChange={(e) => setPeriode(e.target.value as PeriodeValue)}
-          className="h-9 rounded-lg border border-input bg-white px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50"
-        >
-          {PERIODES.map((p) => (
-            <option key={p.value} value={p.value}>{p.label}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={periode}
+            onChange={(e) => { setPeriode(e.target.value as PeriodeValue); setDateDebut(""); setDateFin(""); }}
+            className="h-9 rounded-lg border border-input bg-white px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50"
+          >
+            {PERIODES.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+          <span className="text-muted-foreground text-xs">ou</span>
+          <input
+            type="date"
+            value={dateDebut}
+            onChange={(e) => setDateDebut(e.target.value)}
+            className="h-9 rounded-lg border border-input bg-white px-2 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50 w-[130px]"
+          />
+          <span className="text-muted-foreground text-xs">à</span>
+          <input
+            type="date"
+            value={dateFin}
+            onChange={(e) => setDateFin(e.target.value)}
+            className="h-9 rounded-lg border border-input bg-white px-2 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50 w-[130px]"
+          />
+          {(dateDebut || dateFin) && (
+            <button onClick={() => { setDateDebut(""); setDateFin(""); }} className="text-xs text-red-500 hover:underline">Effacer</button>
+          )}
+        </div>
       </div>
 
       {/* KPIs */}

@@ -176,6 +176,7 @@ export function DocumentPDF({
             <Text style={s.entInfo}>
               {entreprise.adresse}
               {"\n"}Tél: {entreprise.telephone}
+              {entreprise.telephone_fixe ? `\nFixe: ${entreprise.telephone_fixe}` : ""}
               {"\n"}{entreprise.email}
               {entreprise.ninea ? `\nNINEA: ${entreprise.ninea}` : ""}
               {entreprise.rc ? `\nRC: ${entreprise.rc}` : ""}
@@ -313,7 +314,7 @@ export function DocumentPDF({
           <View style={s.footerLine} />
           <View style={s.footerLineAccent} />
           <Text style={s.footerTxt}>
-            {entreprise.nom} — {entreprise.adresse} — Tél: {entreprise.telephone} — {entreprise.email}
+            {entreprise.nom} — {entreprise.adresse} — Tél: {entreprise.telephone}{entreprise.telephone_fixe ? ` / Fixe: ${entreprise.telephone_fixe}` : ""} — {entreprise.email}
             {entreprise.coordonnees_bancaires ? `\n${entreprise.coordonnees_bancaires}` : ""}
           </Text>
         </View>

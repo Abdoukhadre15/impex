@@ -203,10 +203,19 @@ export default function ParametresPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Téléphone</Label>
+                  <Label>Téléphone mobile</Label>
                   <Input
                     value={entreprise.telephone ?? ""}
                     onChange={(e) => updateField("telephone", e.target.value)}
+                    placeholder="+221 7X XXX XX XX"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Téléphone fixe</Label>
+                  <Input
+                    value={entreprise.telephone_fixe ?? ""}
+                    onChange={(e) => updateField("telephone_fixe", e.target.value)}
+                    placeholder="+221 33 XXX XX XX"
                   />
                 </div>
                 <div className="space-y-2">
