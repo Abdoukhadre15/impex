@@ -42,6 +42,11 @@ import {
   Download,
 } from "lucide-react";
 import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
   PieChart,
   Pie,
   Cell,
@@ -346,7 +351,7 @@ export default function ComptabilitePage() {
         </Card>
       </div>
 
-      {/* Graphique circulaire par catégorie */}
+      {/* Graphiques par catégorie */}
       {operations.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="border-0 shadow-sm">
@@ -360,28 +365,20 @@ export default function ComptabilitePage() {
                   const cat = o.categorie?.nom ?? "Autre";
                   entreesMap.set(cat, (entreesMap.get(cat) ?? 0) + o.montant);
                 });
-                const data = Array.from(entreesMap.entries()).map(([name, value]) => ({ name, value }));
+                const data = Array.from(entreesMap.entries())
+                  .map(([name, value]) => ({ name, value }))
+                  .sort((a, b) => b.value - a.value);
                 if (data.length === 0) return <p className="text-sm text-muted-foreground text-center py-8">Aucune entrée</p>;
                 return (
-                  <div className="flex items-center gap-4">
-                    <ResponsiveContainer width="55%" height={250}>
-                      <PieChart>
-                        <Pie data={data} cx="50%" cy="50%" innerRadius={50} outerRadius={95} paddingAngle={3} dataKey="value">
-                          {data.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                        </Pie>
-                        <RechartsTooltip formatter={((v: number) => formatMontant(v)) as never} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="flex-1 space-y-2">
-                      {data.map((item, i) => (
-                        <div key={item.name} className="flex items-center gap-2 text-sm">
-                          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
-                          <span className="text-muted-foreground flex-1 truncate">{item.name}</span>
-                          <span className="font-medium text-green-600">{formatMontant(item.value)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <ResponsiveContainer width="100%" height={Math.max(data.length * 50, 120)}>
+                    <BarChart data={data} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={130} />
+                      <RechartsTooltip formatter={((v: number) => formatMontant(v)) as never} />
+                      <Bar dataKey="value" name="Montant" fill="#22C55E" radius={[0, 4, 4, 0]} barSize={24} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 );
               })()}
             </CardContent>
@@ -398,28 +395,20 @@ export default function ComptabilitePage() {
                   const cat = o.categorie?.nom ?? "Autre";
                   sortiesMap.set(cat, (sortiesMap.get(cat) ?? 0) + o.montant);
                 });
-                const data = Array.from(sortiesMap.entries()).map(([name, value]) => ({ name, value }));
+                const data = Array.from(sortiesMap.entries())
+                  .map(([name, value]) => ({ name, value }))
+                  .sort((a, b) => b.value - a.value);
                 if (data.length === 0) return <p className="text-sm text-muted-foreground text-center py-8">Aucune sortie</p>;
                 return (
-                  <div className="flex items-center gap-4">
-                    <ResponsiveContainer width="55%" height={250}>
-                      <PieChart>
-                        <Pie data={data} cx="50%" cy="50%" innerRadius={50} outerRadius={95} paddingAngle={3} dataKey="value">
-                          {data.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                        </Pie>
-                        <RechartsTooltip formatter={((v: number) => formatMontant(v)) as never} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="flex-1 space-y-2">
-                      {data.map((item, i) => (
-                        <div key={item.name} className="flex items-center gap-2 text-sm">
-                          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
-                          <span className="text-muted-foreground flex-1 truncate">{item.name}</span>
-                          <span className="font-medium text-red-600">{formatMontant(item.value)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <ResponsiveContainer width="100%" height={Math.max(data.length * 50, 120)}>
+                    <BarChart data={data} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={130} />
+                      <RechartsTooltip formatter={((v: number) => formatMontant(v)) as never} />
+                      <Bar dataKey="value" name="Montant" fill="#DD0000" radius={[0, 4, 4, 0]} barSize={24} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 );
               })()}
             </CardContent>
