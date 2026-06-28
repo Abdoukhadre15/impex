@@ -58,24 +58,31 @@ export default function ParametresPage() {
     setSaving(true);
     const supabase = createClient();
 
-    const { id, created_at, updated_at, ...rest } = entreprise as Entreprise;
+    const { id, created_at, updated_at, ...rest } = entreprise as Entreprise & { id?: string; created_at?: string; updated_at?: string };
+
+    const payload: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(rest)) {
+      if (value !== undefined) payload[key] = value;
+    }
 
     if (id) {
       const { error } = await supabase
         .from("entreprise")
-        .update({ ...rest, updated_at: new Date().toISOString() })
+        .update({ ...payload, updated_at: new Date().toISOString() })
         .eq("id", id);
       if (error) {
-        toast.error("Erreur lors de la sauvegarde");
+        console.error("Erreur sauvegarde:", error);
+        toast.error(`Erreur: ${error.message}`);
       } else {
         toast.success("Paramètres sauvegardés");
       }
     } else {
       const { error } = await supabase
         .from("entreprise")
-        .insert([rest]);
+        .insert([payload]);
       if (error) {
-        toast.error("Erreur lors de la création");
+        console.error("Erreur création:", error);
+        toast.error(`Erreur: ${error.message}`);
       } else {
         toast.success("Paramètres créés");
       }

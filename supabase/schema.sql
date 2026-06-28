@@ -50,6 +50,7 @@ CREATE TABLE entreprise (
   rc TEXT,
   adresse TEXT NOT NULL,
   telephone TEXT NOT NULL,
+  telephone_fixe TEXT,
   email TEXT NOT NULL,
   site_web TEXT,
   logo_url TEXT,
