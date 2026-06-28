@@ -132,12 +132,16 @@ export default function FactureDetailPage() {
     let tvaPourcent = 18;
     let remisePourcent = 0;
     let apposerSig = true;
+    let typeFacture = "";
+    let moyenPaiement = "";
     try {
       const parsed = JSON.parse(facture.notes ?? "{}");
       parsedNotes = parsed.notes ?? facture.notes ?? "";
       tvaPourcent = parsed.tva_pourcent ?? 18;
       remisePourcent = parsed.remise_pourcent ?? 0;
       apposerSig = parsed.apposer_signature ?? true;
+      typeFacture = parsed.type_facture ?? "";
+      moyenPaiement = parsed.moyen_paiement ?? "";
     } catch {
       parsedNotes = facture.notes ?? "";
     }
@@ -153,6 +157,8 @@ export default function FactureDetailPage() {
         montantPaye={facture.montant_paye} resteAPayer={facture.reste_a_payer}
         conditions={facture.conditions_paiement ?? undefined}
         notes={parsedNotes || undefined}
+        typeFacture={typeFacture || undefined}
+        moyenPaiement={moyenPaiement || undefined}
       />
     ).toBlob();
     const url = URL.createObjectURL(blob);

@@ -36,6 +36,8 @@ export default function NouvelleFacturePage() {
   const [tvaGlobale, setTvaGlobale] = useState(18);
   const [remiseGlobale, setRemiseGlobale] = useState(0);
   const [apposerSignature, setApposerSignature] = useState(true);
+  const [typeFacture, setTypeFacture] = useState("");
+  const [moyenPaiement, setMoyenPaiement] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -118,7 +120,7 @@ export default function NouvelleFacturePage() {
         total_ttc: totalTTC,
         reste_a_payer: totalTTC,
         conditions_paiement: conditions,
-        notes: JSON.stringify({ notes, tva_pourcent: tvaGlobale, remise_pourcent: remiseGlobale, apposer_signature: apposerSignature }),
+        notes: JSON.stringify({ notes, tva_pourcent: tvaGlobale, remise_pourcent: remiseGlobale, apposer_signature: apposerSignature, type_facture: typeFacture, moyen_paiement: moyenPaiement }),
         created_by: user.id,
       }])
       .select()
@@ -183,6 +185,39 @@ export default function NouvelleFacturePage() {
                 <div className="space-y-2">
                   <Label>Date d&apos;échéance</Label>
                   <Input type="date" value={dateEcheance} onChange={(e) => setDateEcheance(e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Type de facture</Label>
+                  <select
+                    value={typeFacture}
+                    onChange={(e) => setTypeFacture(e.target.value)}
+                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50"
+                  >
+                    <option value="">-- Aucun --</option>
+                    <option value="Acompte">Acompte</option>
+                    <option value="Reliquat">Reliquat</option>
+                    <option value="Pro-forma">Pro-forma</option>
+                    <option value="Définitive">Définitive</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Moyen de paiement</Label>
+                  <select
+                    value={moyenPaiement}
+                    onChange={(e) => setMoyenPaiement(e.target.value)}
+                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50"
+                  >
+                    <option value="">-- Aucun --</option>
+                    <option value="Wave">Wave</option>
+                    <option value="Orange Money">Orange Money</option>
+                    <option value="Free Money">Free Money</option>
+                    <option value="Virement">Virement</option>
+                    <option value="Chèque">Chèque</option>
+                    <option value="Espèce">Espèce</option>
+                    <option value="Autre">Autre</option>
+                  </select>
                 </div>
               </div>
               <div className="space-y-2">

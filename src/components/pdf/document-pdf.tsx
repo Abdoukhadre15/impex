@@ -37,6 +37,8 @@ interface DocumentPDFProps {
   montantPaye?: number;
   resteAPayer?: number;
   apposerSignature?: boolean;
+  typeFacture?: string;
+  moyenPaiement?: string;
 }
 
 function fmt(n: number): string {
@@ -149,8 +151,10 @@ export function DocumentPDF({
   montantPaye,
   resteAPayer,
   apposerSignature = true,
+  typeFacture,
+  moyenPaiement,
 }: DocumentPDFProps) {
-  const titre = type === "devis" ? "DEVIS" : "FACTURE";
+  const titre = type === "devis" ? "DEVIS" : typeFacture ? `FACTURE ${typeFacture.toUpperCase()}` : "FACTURE";
 
   return (
     <Document>
@@ -207,6 +211,7 @@ export function DocumentPDF({
                 Date : {fmtDate(date)}
                 {"\n"}{dateSecondaireLabel} : {fmtDate(dateSecondaire)}
                 {conditions ? `\nPaiement : ${conditions}` : ""}
+                {moyenPaiement ? `\nMoyen : ${moyenPaiement}` : ""}
               </Text>
             </View>
           </View>
