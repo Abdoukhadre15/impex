@@ -11,6 +11,10 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Impex Germany Senegal - Gestion Commerciale",
   description: "Application de gestion commerciale et comptable pour Impex Germany Senegal",
+  icons: {
+    icon: "/Impex-favicon.png",
+    apple: "/Impex-favicon.png",
+  },
 };
 
 export default function RootLayout({
