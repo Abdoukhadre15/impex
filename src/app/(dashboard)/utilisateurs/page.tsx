@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -20,18 +20,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Plus, Loader2, UserCog, Pencil } from "lucide-react";
+import { Plus, Loader2, UserCog, KeyRound, Eye, EyeOff } from "lucide-react";
 import type { Profile, UserRole } from "@/types/database";
 import { formatDate } from "@/lib/formatters";
 
@@ -53,12 +46,19 @@ export default function UtilisateursPage() {
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editUser, setEditUser] = useState<Partial<Profile> | null>(null);
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newNom, setNewNom] = useState("");
   const [newRole, setNewRole] = useState<UserRole>("vendeur");
   const [saving, setSaving] = useState(false);
+
+  const [pwdDialogOpen, setPwdDialogOpen] = useState(false);
+  const [pwdUserId, setPwdUserId] = useState("");
+  const [pwdUserName, setPwdUserName] = useState("");
+  const [pwdNew, setPwdNew] = useState("");
+  const [pwdConfirm, setPwdConfirm] = useState("");
+  const [pwdShow, setPwdShow] = useState(false);
+  const [pwdSaving, setPwdSaving] = useState(false);
 
   const loadUsers = async () => {
     const supabase = createClient();
@@ -97,7 +97,8 @@ export default function UtilisateursPage() {
     });
 
     if (!res.ok) {
-      toast.error("Erreur lors de la création");
+      const data = await res.json();
+      toast.error(data.error || "Erreur lors de la création");
     } else {
       toast.success("Utilisateur créé");
       setDialogOpen(false);
@@ -136,6 +137,46 @@ export default function UtilisateursPage() {
     }
   };
 
+  const openPwdDialog = (user: Profile) => {
+    setPwdUserId(user.id);
+    setPwdUserName(user.nom_complet);
+    setPwdNew("");
+    setPwdConfirm("");
+    setPwdShow(false);
+    setPwdDialogOpen(true);
+  };
+
+  const handleUpdatePassword = async () => {
+    if (!pwdNew) {
+      toast.error("Saisissez un nouveau mot de passe");
+      return;
+    }
+    if (pwdNew.length < 6) {
+      toast.error("Le mot de passe doit contenir au moins 6 caractères");
+      return;
+    }
+    if (pwdNew !== pwdConfirm) {
+      toast.error("Les mots de passe ne correspondent pas");
+      return;
+    }
+
+    setPwdSaving(true);
+    const res = await fetch("/api/auth/update-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: pwdUserId, password: pwdNew }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      toast.error(data.error || "Erreur lors de la modification");
+    } else {
+      toast.success("Mot de passe modifié");
+      setPwdDialogOpen(false);
+    }
+    setPwdSaving(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -167,15 +208,16 @@ export default function UtilisateursPage() {
               </div>
               <div className="space-y-2">
                 <Label>Rôle</Label>
-                <Select value={newRole} onValueChange={(v) => v && setNewRole(v as UserRole)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">Administrateur</SelectItem>
-                    <SelectItem value="vendeur">Vendeur</SelectItem>
-                    <SelectItem value="comptable">Comptable</SelectItem>
-                    <SelectItem value="consultation">Consultation</SelectItem>
-                  </SelectContent>
-                </Select>
+                <select
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value as UserRole)}
+                  className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50"
+                >
+                  <option value="admin">Administrateur</option>
+                  <option value="vendeur">Vendeur</option>
+                  <option value="comptable">Comptable</option>
+                  <option value="consultation">Consultation</option>
+                </select>
               </div>
             </div>
             <div className="flex justify-end gap-2">
@@ -188,6 +230,62 @@ export default function UtilisateursPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Dialog modifier mot de passe */}
+      <Dialog open={pwdDialogOpen} onOpenChange={setPwdDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Modifier le mot de passe</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              Utilisateur : <span className="font-medium text-foreground">{pwdUserName}</span>
+            </p>
+            <div className="space-y-2">
+              <Label>Nouveau mot de passe *</Label>
+              <div className="relative">
+                <Input
+                  type={pwdShow ? "text" : "password"}
+                  value={pwdNew}
+                  onChange={(e) => setPwdNew(e.target.value)}
+                  placeholder="Minimum 6 caractères"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPwdShow(!pwdShow)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {pwdShow ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Confirmer le mot de passe *</Label>
+              <Input
+                type={pwdShow ? "text" : "password"}
+                value={pwdConfirm}
+                onChange={(e) => setPwdConfirm(e.target.value)}
+                placeholder="Retapez le mot de passe"
+              />
+              {pwdConfirm && pwdNew !== pwdConfirm && (
+                <p className="text-xs text-red-500">Les mots de passe ne correspondent pas</p>
+              )}
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setPwdDialogOpen(false)}>Annuler</Button>
+            <Button
+              onClick={handleUpdatePassword}
+              disabled={pwdSaving || !pwdNew || pwdNew !== pwdConfirm}
+              className="bg-[#DD0000] hover:bg-[#BB0000]"
+            >
+              {pwdSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Modifier
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Card className="border-0 shadow-sm">
         <CardContent className="pt-6">
@@ -209,6 +307,7 @@ export default function UtilisateursPage() {
                   <TableHead>Rôle</TableHead>
                   <TableHead className="hidden md:table-cell">Créé le</TableHead>
                   <TableHead className="text-center">Actif</TableHead>
+                  <TableHead className="text-center">Mot de passe</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -217,22 +316,16 @@ export default function UtilisateursPage() {
                     <TableCell className="font-medium">{user.nom_complet}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
-                      <Select
+                      <select
                         value={user.role}
-                        onValueChange={(v) => v && handleUpdateRole(user.id, v as UserRole)}
+                        onChange={(e) => handleUpdateRole(user.id, e.target.value as UserRole)}
+                        className={`text-xs font-medium px-2 py-1 rounded-full border-0 cursor-pointer outline-none ${roleColors[user.role]}`}
                       >
-                        <SelectTrigger className="w-[150px] h-8">
-                          <Badge className={roleColors[user.role]}>
-                            {roleLabels[user.role]}
-                          </Badge>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="admin">Administrateur</SelectItem>
-                          <SelectItem value="vendeur">Vendeur</SelectItem>
-                          <SelectItem value="comptable">Comptable</SelectItem>
-                          <SelectItem value="consultation">Consultation</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        <option value="admin">Administrateur</option>
+                        <option value="vendeur">Vendeur</option>
+                        <option value="comptable">Comptable</option>
+                        <option value="consultation">Consultation</option>
+                      </select>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
                       {formatDate(user.created_at)}
@@ -242,6 +335,18 @@ export default function UtilisateursPage() {
                         checked={user.actif}
                         onCheckedChange={(v) => handleToggleActif(user.id, v)}
                       />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openPwdDialog(user)}
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Modifier le mot de passe"
+                      >
+                        <KeyRound className="h-4 w-4 mr-1" />
+                        <span className="hidden md:inline">Modifier</span>
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
