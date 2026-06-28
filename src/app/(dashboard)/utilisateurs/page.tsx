@@ -62,10 +62,14 @@ export default function UtilisateursPage() {
 
   const loadUsers = async () => {
     const supabase = createClient();
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select("*")
       .order("created_at", { ascending: false });
+    if (error) {
+      console.error("Erreur chargement utilisateurs:", error);
+      toast.error("Erreur de chargement des utilisateurs");
+    }
     setUsers(data ?? []);
     setLoading(false);
   };

@@ -310,10 +310,14 @@ ALTER TABLE operations_compta ENABLE ROW LEVEL SECURITY;
 ALTER TABLE journal_connexions ENABLE ROW LEVEL SECURITY;
 
 -- Politiques RLS : accès authentifié pour toutes les tables
-CREATE POLICY "Authenticated users can view profiles" ON profiles FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Admins can manage profiles" ON profiles FOR ALL USING (
-  EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+CREATE POLICY "profiles_select" ON profiles FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "profiles_update_own" ON profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "profiles_update_admin" ON profiles FOR UPDATE USING (
+  (SELECT raw_user_meta_data->>'role' FROM auth.users WHERE id = auth.uid()) = 'admin'
+);
+CREATE POLICY "profiles_insert" ON profiles FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "profiles_delete_admin" ON profiles FOR DELETE USING (
+  (SELECT raw_user_meta_data->>'role' FROM auth.users WHERE id = auth.uid()) = 'admin'
 );
 
 CREATE POLICY "Authenticated users full access entreprise" ON entreprise FOR ALL USING (auth.role() = 'authenticated');
