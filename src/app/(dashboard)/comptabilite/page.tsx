@@ -41,10 +41,19 @@ import {
   Wallet,
   Download,
 } from "lucide-react";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+} from "recharts";
 import type { OperationCompta, CategorieCompta, TypeOperation, ModePaiement, Entreprise } from "@/types/database";
 import { formatMontant, formatDate } from "@/lib/formatters";
 import { pdf } from "@react-pdf/renderer";
 import { RapportComptaPDF } from "@/components/pdf/rapport-compta-pdf";
+
+const PIE_COLORS = ["#DD0000", "#FFCE00", "#22C55E", "#3B82F6", "#000000", "#F59E0B", "#8B5CF6", "#EC4899", "#14B8A6", "#6366F1", "#F97316"];
 
 const emptyOp = {
   type: "entree" as TypeOperation,
@@ -336,6 +345,87 @@ export default function ComptabilitePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Graphique circulaire par catégorie */}
+      {operations.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="border-0 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg">Entrées par catégorie</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {(() => {
+                const entreesMap = new Map<string, number>();
+                operations.filter((o) => o.type === "entree").forEach((o) => {
+                  const cat = o.categorie?.nom ?? "Autre";
+                  entreesMap.set(cat, (entreesMap.get(cat) ?? 0) + o.montant);
+                });
+                const data = Array.from(entreesMap.entries()).map(([name, value]) => ({ name, value }));
+                if (data.length === 0) return <p className="text-sm text-muted-foreground text-center py-8">Aucune entrée</p>;
+                return (
+                  <div className="flex items-center gap-4">
+                    <ResponsiveContainer width="55%" height={250}>
+                      <PieChart>
+                        <Pie data={data} cx="50%" cy="50%" innerRadius={50} outerRadius={95} paddingAngle={3} dataKey="value">
+                          {data.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                        </Pie>
+                        <RechartsTooltip formatter={((v: number) => formatMontant(v)) as never} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="flex-1 space-y-2">
+                      {data.map((item, i) => (
+                        <div key={item.name} className="flex items-center gap-2 text-sm">
+                          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                          <span className="text-muted-foreground flex-1 truncate">{item.name}</span>
+                          <span className="font-medium text-green-600">{formatMontant(item.value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg">Sorties par catégorie</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {(() => {
+                const sortiesMap = new Map<string, number>();
+                operations.filter((o) => o.type === "sortie").forEach((o) => {
+                  const cat = o.categorie?.nom ?? "Autre";
+                  sortiesMap.set(cat, (sortiesMap.get(cat) ?? 0) + o.montant);
+                });
+                const data = Array.from(sortiesMap.entries()).map(([name, value]) => ({ name, value }));
+                if (data.length === 0) return <p className="text-sm text-muted-foreground text-center py-8">Aucune sortie</p>;
+                return (
+                  <div className="flex items-center gap-4">
+                    <ResponsiveContainer width="55%" height={250}>
+                      <PieChart>
+                        <Pie data={data} cx="50%" cy="50%" innerRadius={50} outerRadius={95} paddingAngle={3} dataKey="value">
+                          {data.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                        </Pie>
+                        <RechartsTooltip formatter={((v: number) => formatMontant(v)) as never} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="flex-1 space-y-2">
+                      {data.map((item, i) => (
+                        <div key={item.name} className="flex items-center gap-2 text-sm">
+                          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                          <span className="text-muted-foreground flex-1 truncate">{item.name}</span>
+                          <span className="font-medium text-red-600">{formatMontant(item.value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-4">
