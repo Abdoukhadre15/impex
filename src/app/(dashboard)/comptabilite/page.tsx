@@ -55,6 +55,7 @@ import {
 } from "recharts";
 import type { OperationCompta, CategorieCompta, TypeOperation, ModePaiement, Entreprise } from "@/types/database";
 import { formatMontant, formatDate } from "@/lib/formatters";
+import { PERIODES, getDateRange, type PeriodeValue } from "@/lib/periodes";
 import { pdf } from "@react-pdf/renderer";
 import { RapportComptaPDF } from "@/components/pdf/rapport-compta-pdf";
 
@@ -88,28 +89,20 @@ export default function ComptabilitePage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyOp);
   const [saving, setSaving] = useState(false);
-  const [filtrePeriode, setFiltrePeriode] = useState("mois");
+  const [filtrePeriode, setFiltrePeriode] = useState<PeriodeValue>("ce_mois");
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [nouvelleCat, setNouvelleCat] = useState("");
 
   const loadData = async () => {
     const supabase = createClient();
-    const now = new Date();
-    let dateDebut = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    if (filtrePeriode === "semaine") {
-      dateDebut = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    } else if (filtrePeriode === "annee") {
-      dateDebut = new Date(now.getFullYear(), 0, 1);
-    } else if (filtrePeriode === "jour") {
-      dateDebut = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    }
+    const { debut, fin } = getDateRange(filtrePeriode);
 
     const [opsRes, catsRes, entRes] = await Promise.all([
       supabase
         .from("operations_compta")
         .select("*, categorie:categories_compta(*)")
-        .gte("date_operation", dateDebut.toISOString().split("T")[0])
+        .gte("date_operation", debut)
+        .lte("date_operation", fin)
         .order("date_operation", { ascending: false }),
       supabase.from("categories_compta").select("*").order("nom"),
       supabase.from("entreprise").select("*").single(),
@@ -476,13 +469,12 @@ export default function ComptabilitePage() {
             <CardTitle className="text-lg">Journal des opérations</CardTitle>
             <select
               value={filtrePeriode}
-              onChange={(e) => setFiltrePeriode(e.target.value)}
+              onChange={(e) => setFiltrePeriode(e.target.value as PeriodeValue)}
               className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50"
             >
-              <option value="jour">Aujourd&apos;hui</option>
-              <option value="semaine">Cette semaine</option>
-              <option value="mois">Ce mois</option>
-              <option value="annee">Cette année</option>
+              {PERIODES.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
             </select>
           </div>
         </CardHeader>
