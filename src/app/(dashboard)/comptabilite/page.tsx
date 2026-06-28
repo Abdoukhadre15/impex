@@ -90,6 +90,7 @@ export default function ComptabilitePage() {
   const [saving, setSaving] = useState(false);
   const [filtrePeriode, setFiltrePeriode] = useState("mois");
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [nouvelleCat, setNouvelleCat] = useState("");
 
   const loadData = async () => {
     const supabase = createClient();
@@ -123,6 +124,11 @@ export default function ComptabilitePage() {
     loadData();
   }, [filtrePeriode]);
 
+  const selectedCatIsAutre = (() => {
+    const cat = categories.find((c) => c.id === form.categorie_id);
+    return cat?.nom?.toLowerCase().includes("autres");
+  })();
+
   const handleSave = async () => {
     if (!form.categorie_id || !form.description || form.montant <= 0) {
       toast.error("Remplissez tous les champs obligatoires");
@@ -133,8 +139,37 @@ export default function ComptabilitePage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    let categorieId = form.categorie_id;
+
+    if (selectedCatIsAutre && nouvelleCat.trim()) {
+      const { data: existante } = await supabase
+        .from("categories_compta")
+        .select("id")
+        .eq("nom", nouvelleCat.trim())
+        .eq("type", form.type)
+        .single();
+
+      if (existante) {
+        categorieId = existante.id;
+      } else {
+        const { data: newCat, error: catError } = await supabase
+          .from("categories_compta")
+          .insert([{ nom: nouvelleCat.trim(), type: form.type }])
+          .select()
+          .single();
+
+        if (catError || !newCat) {
+          toast.error("Erreur lors de la création de la catégorie");
+          setSaving(false);
+          return;
+        }
+        categorieId = newCat.id;
+      }
+    }
+
     const { error } = await supabase.from("operations_compta").insert([{
       ...form,
+      categorie_id: categorieId,
       created_by: user.id,
     }]);
 
@@ -143,6 +178,7 @@ export default function ComptabilitePage() {
       toast.success("Opération enregistrée");
       setDialogOpen(false);
       setForm(emptyOp);
+      setNouvelleCat("");
       loadData();
     }
     setSaving(false);
@@ -227,7 +263,7 @@ export default function ComptabilitePage() {
                   <Label>Catégorie *</Label>
                   <select
                     value={form.categorie_id}
-                    onChange={(e) => setForm({ ...form, categorie_id: e.target.value })}
+                    onChange={(e) => { setForm({ ...form, categorie_id: e.target.value }); setNouvelleCat(""); }}
                     className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50"
                   >
                     <option value="">-- Choisir --</option>
@@ -235,6 +271,14 @@ export default function ComptabilitePage() {
                       <option key={c.id} value={c.id}>{c.nom}</option>
                     ))}
                   </select>
+                  {selectedCatIsAutre && (
+                    <Input
+                      value={nouvelleCat}
+                      onChange={(e) => setNouvelleCat(e.target.value)}
+                      placeholder="Saisir le nom de la nouvelle catégorie..."
+                      className="mt-2"
+                    />
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -400,15 +444,25 @@ export default function ComptabilitePage() {
                   .sort((a, b) => b.value - a.value);
                 if (data.length === 0) return <p className="text-sm text-muted-foreground text-center py-8">Aucune sortie</p>;
                 return (
-                  <ResponsiveContainer width="100%" height={Math.max(data.length * 50, 120)}>
-                    <BarChart data={data} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" horizontal={false} />
-                      <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={130} />
-                      <RechartsTooltip formatter={((v: number) => formatMontant(v)) as never} />
-                      <Bar dataKey="value" name="Montant" fill="#DD0000" radius={[0, 4, 4, 0]} barSize={24} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <div className="flex items-center gap-4">
+                    <ResponsiveContainer width="55%" height={250}>
+                      <PieChart>
+                        <Pie data={data} cx="50%" cy="50%" innerRadius={50} outerRadius={95} paddingAngle={3} dataKey="value">
+                          {data.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                        </Pie>
+                        <RechartsTooltip formatter={((v: number) => formatMontant(v)) as never} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="flex-1 space-y-2">
+                      {data.map((item, i) => (
+                        <div key={item.name} className="flex items-center gap-2 text-sm">
+                          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                          <span className="text-muted-foreground flex-1 truncate">{item.name}</span>
+                          <span className="font-medium text-red-600">{formatMontant(item.value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 );
               })()}
             </CardContent>
